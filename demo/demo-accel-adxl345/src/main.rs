@@ -13,7 +13,7 @@ use embedded_hal::spi;
 use panic_halt as _;
 use sh1106::{prelude::*, Builder, interface::DisplayInterface};
 use stm32f4xx_hal::{prelude::*, pac, gpio::NoPin, i2c::I2c};
-use adxl343::{Adxl343, accelerometer::Accelerometer, DataFormatFlags};
+use adxl343::{Adxl343, accelerometer::{RawAccelerometer, vector::{I16x3, F32x3}}, DataFormatFlags};
 use micromath::F32Ext;
 
 #[entry]
@@ -73,7 +73,7 @@ fn run(
         &clocks,
     );
 
-    let format: DataFormatFlags = DataFormatFlags::RANGE_HI;
+    let format: DataFormatFlags = DataFormatFlags::RANGE_LO;
 
     let mut accelerometer = match Adxl343::new_with_data_format(i2c, format) {
         Ok(device) => device,
@@ -84,8 +84,9 @@ fn run(
 
     loop {
         display.clear();
-        match accelerometer.accel_norm() {
-            Ok(values) => {
+        match accelerometer.accel_raw() {
+            Ok(raw_values) => {
+                let values = raw_to_g(raw_values);
                 let sum = (sqr(values.x) + sqr(values.y) + sqr(values.z)).sqrt();
                 let mut text = ArrayString::<100>::new();
                 let _ = write!(
@@ -103,6 +104,16 @@ fn run(
         display.flush().unwrap();
         delay.delay_ms(20u16);
     }
+}
+
+fn raw_to_g(raw_values: I16x3) -> F32x3 {
+    const CONVERSION: f32 = 1.0/32768.0;
+
+    F32x3::new(
+        raw_values.x as f32*CONVERSION,
+        raw_values.y as f32*CONVERSION,
+        raw_values.z as f32*CONVERSION,
+    )
 }
 
 fn sqr(value: f32) -> f32 {
