@@ -14,6 +14,7 @@ use panic_halt as _;
 use sh1106::{prelude::*, Builder, interface::DisplayInterface};
 use stm32f4xx_hal::{prelude::*, pac, gpio::NoPin, i2c::I2c};
 use adxl343::{Adxl343, accelerometer::Accelerometer};
+use micromath::F32Ext;
 
 #[entry]
 fn main() -> ! {
@@ -84,11 +85,12 @@ fn run(
         display.clear();
         match accelerometer.accel_norm() {
             Ok(values) => {
+                let sum = (sqr(values.x) + sqr(values.y) + sqr(values.z)).sqrt();
                 let mut text = ArrayString::<100>::new();
                 let _ = write!(
                     &mut text,
-                    "Accelerometer demo\nX = {}\nY = {}\nZ = {}",
-                    values.x, values.y, values.z
+                    "Accelerometer demo\nX = {}\nY = {}\nZ = {}\nS = {}",
+                    values.x, values.y, values.z, sum
                 );
                 let _ = print(&mut display, &text);
             },
@@ -98,7 +100,12 @@ fn run(
         };
 
         display.flush().unwrap();
+        delay.delay_ms(20u16);
     }
+}
+
+fn sqr(value: f32) -> f32 {
+    value*value
 }
 
 fn print<T>(
