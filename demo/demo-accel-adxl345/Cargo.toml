@@ -11,6 +11,7 @@ cortex-m-rt = "0.7"
 panic-halt = "0.2.0"
 embedded-graphics = "0.7.1"
 sh1106 = "0.4.0"
+adxl343 = "0.8.0"
 
 [dependencies.stm32f4xx-hal]
 version = "0.13.2"
