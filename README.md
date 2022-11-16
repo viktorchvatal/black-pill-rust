@@ -15,6 +15,7 @@ Blue pill board examples
 
 Useful links for programming Black Pill board
 
+ - pin out and board documentation: https://docs.zephyrproject.org/3.2.0/boards/arm/blackpill_f401ce/doc/index.html
  - https://www.jef.land/stm32f411-pit/
  - https://crates.io/crates/stm32f4xx-hal
 
