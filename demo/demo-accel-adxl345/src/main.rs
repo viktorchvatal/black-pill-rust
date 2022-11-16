@@ -7,13 +7,13 @@ use cortex_m_rt::{entry};
 use embedded_graphics::{
     pixelcolor::BinaryColor,
     prelude::*,
-    mono_font::{MonoTextStyle, ascii::{FONT_5X8, FONT_7X13_BOLD}}, text::Text
+    mono_font::{MonoTextStyle, ascii::{FONT_7X13_BOLD}}, text::Text
 };
 use embedded_hal::spi;
 use panic_halt as _;
 use sh1106::{prelude::*, Builder, interface::DisplayInterface};
 use stm32f4xx_hal::{prelude::*, pac, gpio::NoPin, i2c::I2c};
-use adxl343::{Adxl343, accelerometer::Accelerometer};
+use adxl343::{Adxl343, accelerometer::Accelerometer, DataFormatFlags};
 use micromath::F32Ext;
 
 #[entry]
@@ -41,7 +41,6 @@ fn run(
     let clocks = rcc.cfgr.use_hse(25.MHz()).sysclk(100.MHz()).hclk(25.MHz()).freeze();
 
     let gpiob = dp.GPIOB.split();
-    let gpioc = dp.GPIOC.split();
 
     let dc = gpiob.pb6.into_push_pull_output();
 
@@ -64,7 +63,7 @@ fn run(
     display.reset(&mut display_reset, &mut delay).map_err(|_| ())?;
     display.init().unwrap();
 
-    let mut i2c = I2c::new(
+    let i2c = I2c::new(
         dp.I2C1,
         (
             gpiob.pb8.into_alternate().set_open_drain(),
@@ -74,7 +73,9 @@ fn run(
         &clocks,
     );
 
-    let mut accelerometer = match Adxl343::new(i2c) {
+    let format: DataFormatFlags = DataFormatFlags::RANGE_HI;
+
+    let mut accelerometer = match Adxl343::new_with_data_format(i2c, format) {
         Ok(device) => device,
         Err(_error) => stop_on_error(
             display, "Accelerometer demo\nFailed to\ninitialize"
