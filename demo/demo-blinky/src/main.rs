@@ -36,7 +36,7 @@ fn main() -> ! {
         let mut led = gpioc.pc13.into_push_pull_output();
         led.set_high();
 
-        let message = ".... . .-.. .-.. ---    ";
+        let message = "...././.-../.-.. ---    ";
 
         // Transmit the message using the onboard LED
         loop {
@@ -57,7 +57,7 @@ where LED: OutputPin, D: DelayUs<u16> + DelayMs<u16>, {
     for char in message.chars() {
         match char {
             // Just delay
-            ' ' => delay.delay_ms(500),
+            ' ' | '/' => delay.delay_ms(500),
             // Short blink
             '.' => {
                 led.set_low().map_err(|_| ())?;
