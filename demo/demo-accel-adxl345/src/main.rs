@@ -53,7 +53,7 @@ fn run(
         .into();
 
     display.reset(&mut display_reset, &mut delay).map_err(|_| ())?;
-    display.init().unwrap();
+    display.init().map_err(|_| ())?;
 
     let i2c = I2c::new(
         dp.I2C1,
@@ -87,7 +87,6 @@ fn run(
 
         render_values(&mut display, values)?;
         display.flush().map_err(|_| {})?;
-        delay.delay_ms(20u16);
     }
 }
 
