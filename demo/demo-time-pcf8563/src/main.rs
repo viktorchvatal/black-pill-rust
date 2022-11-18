@@ -37,7 +37,6 @@ fn run(
     let clocks = rcc.cfgr.use_hse(25.MHz()).sysclk(100.MHz()).hclk(25.MHz()).freeze();
 
     let gpiob = dp.GPIOB.split();
-    let gpioc = dp.GPIOC.split();
 
     let dc = gpiob.pb6.into_push_pull_output();
 
@@ -49,7 +48,6 @@ fn run(
     );
 
     let mut display_reset = gpiob.pb14.into_push_pull_output();
-    let mut led = gpioc.pc13.into_push_pull_output();
     let mut delay = dp.TIM5.delay_us(&clocks);
 
     let mut display: GraphicsMode<_> = Builder::new()
@@ -91,7 +89,6 @@ fn run(
      */
 
     loop {
-        led.set_high();
         display.clear();
 
         let mut text = ArrayString::<40>::new();
@@ -106,8 +103,6 @@ fn run(
         };
 
         display_text(&mut display, &text).unwrap();
-
-        led.set_low();
 
         delay.delay_ms(100u16);
     }
