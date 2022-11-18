@@ -1,20 +1,19 @@
 #![no_std]
 #![no_main]
 
+use arrayvec::ArrayString;
+use core::{fmt::Write};
 use cortex_m_rt::{entry};
 use embedded_graphics::{
     pixelcolor::BinaryColor,
     prelude::*,
-    mono_font::{MonoTextStyle, ascii::FONT_5X8}, text::Text
+    mono_font::{MonoTextStyle, ascii::FONT_6X10}, text::Text
 };
 use embedded_hal::spi;
 use embedded_sdmmc::{Controller, SdMmcSpi, TimeSource, Timestamp, VolumeIdx};
 use panic_halt as _;
 use sh1106::{prelude::*, Builder, interface::DisplayInterface};
 use stm32f4xx_hal::{prelude::*, pac, gpio::NoPin};
-use cortex_m_semihosting as sh;
-use sh::hio;
-use core::fmt::Write;
 
 #[entry]
 fn main() -> ! {
@@ -73,25 +72,23 @@ fn run(
     let sd_cs = gpiob.pb0.into_push_pull_output();
 
     let mut sd_controller = Controller::new(SdMmcSpi::new(sd_spi, sd_cs), Clock {});
-    let mut hstdout = hio::hstdout().unwrap();
+    let mut out = ArrayString::<100>::new();
 
     match sd_controller.device().init() {
         Ok(_) => {
-            write!(hstdout, "OK!\nCard size...").unwrap();
             match sd_controller.device().card_size_bytes() {
-                Ok(size) => writeln!(hstdout, "{}", size).unwrap(),
-                Err(e) => writeln!(hstdout, "Err: {:?}", e).unwrap(),
+                Ok(size) => write!(&mut out, "SD OK: {} MB\n", size >> 20).unwrap(),
+                Err(_err) => write!(&mut out, "SD Card Connected\nCannot read size\n").unwrap(),
             }
-            for parition_id in 0..8 {
-                write!(hstdout, "Volume {}...", parition_id).unwrap();
-                match sd_controller.get_volume(VolumeIdx(parition_id)) {
-                    Ok(v) => writeln!(hstdout, "{:?}", v).unwrap(),
-                    Err(e) => writeln!(hstdout, "Err: {:?}", e).unwrap(),
-                }
+            match sd_controller.get_volume(VolumeIdx(0)) {
+                Ok(_fs) => write!(out, "Get FAT Volume 0: OK").unwrap(),
+                Err(_err) => write!(out, "Vol 0 cannot read FAT").unwrap(),
             }
         }
-        Err(e) => writeln!(hstdout, "{:?}!", e).unwrap(),
+        Err(_err) => write!(&mut out, "SD Card Error\nCannot connect").unwrap(),
     }
+
+    display_text(&mut display, &out).unwrap();
 
     loop {
 
@@ -121,7 +118,7 @@ fn display_text<T>(
 where T: DisplayInterface {
     display.clear();
 
-    let style = MonoTextStyle::new(&FONT_5X8, BinaryColor::On);
+    let style = MonoTextStyle::new(&FONT_6X10, BinaryColor::On);
     let position = Point::new(0, 8);
     Text::new(&message, position, style).draw(display).map_err(|_| ())?;
     display.flush().map_err(|_| ())
