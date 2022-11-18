@@ -2,7 +2,7 @@
 #![no_main]
 
 use arrayvec::{ArrayString, ArrayVec};
-use core::{fmt::Write};
+use core::{fmt::Write, panic::PanicInfo};
 use cortex_m_rt::{entry};
 use embedded_graphics::{
     pixelcolor::BinaryColor,
@@ -15,9 +15,19 @@ use embedded_hal::{
 use embedded_sdmmc::{
     Controller, SdMmcSpi, TimeSource, Timestamp, VolumeIdx, Volume, Mode, Directory
 };
-use panic_halt as _;
 use sh1106::{prelude::*, Builder, interface::DisplayInterface};
 use stm32f4xx_hal::{prelude::*, pac, gpio::NoPin};
+
+/// Turn on onboard LED in case of panic
+#[inline(never)]
+#[panic_handler]
+fn on_panic(_info: &PanicInfo) -> ! {
+    let dp = unsafe { pac::Peripherals::steal() };
+    let gpioc = dp.GPIOC.split();
+    let mut led = gpioc.pc13.into_push_pull_output();
+    let _ = led.set_low();
+    loop { }
+}
 
 #[entry]
 fn main() -> ! {
@@ -74,32 +84,39 @@ fn run(
     );
 
     let sd_cs = gpiob.pb0.into_push_pull_output();
-
     let mut sd_controller = Controller::new(SdMmcSpi::new(sd_spi, sd_cs), Clock {});
-    let mut out_text = ArrayString::<100>::new();
-    let mut volume: Option<Volume> = open_file_volume(&mut sd_controller, &mut out_text);
-
-    if let Some(ref mut volume) = volume {
-        let root_dir = match sd_controller.open_root_dir(volume) {
-            Ok(dir) => Some(dir),
-            Err(_err) => {
-                writeln!(&mut out_text, "Root dir read ERR").unwrap();
-                None
-            }
-        };
-
-        if let Some(dir) = root_dir {
-            let mut file_names: ArrayVec<ArrayString::<12>, 2> = ArrayVec::new();
-            read_file_names(&mut sd_controller, volume, &dir, &mut file_names);
-            print_file_contents(&mut sd_controller, volume, &dir, &file_names, &mut out_text);
-        }
-
-    }
-
-    display_text(&mut display, &out_text).unwrap();
+    let mut counter: usize = 0;
 
     loop {
+        let mut debug = ArrayString::<100>::new();
+        let mut volume: Option<Volume> = open_file_volume(&mut sd_controller, &mut debug);
 
+        if let Some(ref mut volume) = volume {
+            let root_dir = match sd_controller.open_root_dir(volume) {
+                Ok(dir) => Some(dir),
+                Err(err) => {
+                    let _ = writeln!(&mut debug, "Root dir read ERR\n{:?}", err);
+                    None
+                }
+            };
+
+            if let Some(dir) = root_dir {
+                let mut file_names: ArrayVec<ArrayString::<12>, 2> = ArrayVec::new();
+                read_file_names(&mut sd_controller, volume, &dir, &mut file_names, &mut debug);
+                print_file_contents(&mut sd_controller, volume, &dir, &file_names, &mut debug);
+                sd_controller.close_dir(volume, dir);
+
+                if file_names.is_empty() {
+                    let _ = writeln!(&mut debug, "No files found");
+                }
+            }
+            sd_controller.device().deinit();
+        }
+
+        display_text(&mut display, &debug).unwrap();
+        render_counter(&mut display, counter).unwrap();
+        delay.delay_ms(1000u16);
+        counter += 1;
     }
 }
 
@@ -127,6 +144,7 @@ where
                 let read_size = controller.read(&volume, &mut file, &mut buffer).unwrap();
                 let bytes = &buffer[0..read_size];
                 write_file_data(&file_name, bytes, out);
+                let _ = controller.close_file(volume, file);
             }
         }
     }
@@ -153,7 +171,8 @@ fn read_file_names<SPI, CS, T, const N: usize>(
     controller: &mut Controller<SdMmcSpi<SPI, CS>, T>,
     volume: &Volume,
     dir: &Directory,
-    file_names: &mut ArrayVec<ArrayString::<12>, N>
+    file_names: &mut ArrayVec<ArrayString::<12>, N>,
+    out: &mut dyn Write
 )
 where
     SPI: FullDuplex<u8>,
@@ -161,14 +180,17 @@ where
     T: TimeSource,
     <SPI as FullDuplex<u8>>::Error: core::fmt::Debug
 {
-    let _ = controller
-        .iterate_dir(volume, &dir, |item| {
+    if let Err(error) = controller.iterate_dir(
+        volume, &dir, |item| {
             let mut file_name = ArrayString::<12>::new();
             let _ = write!(&mut file_name, "{}", item.name);
             if !file_names.is_full() {
                 file_names.push(file_name);
             }
-        });
+        }
+    ) {
+        let _ = writeln!(out, "Iterate dir error\n{:?}", error);
+    }
 }
 
 /// Open first SD card volume and return it
@@ -221,6 +243,19 @@ impl TimeSource for Clock {
             seconds: 0,
         }
     }
+}
+
+fn render_counter<T>(
+    display: &mut GraphicsMode<T>,
+    counter: usize
+) -> Result<(), ()>
+where T: DisplayInterface {
+    let style = MonoTextStyle::new(&FONT_6X10, BinaryColor::On);
+    let position = Point::new(100, 63);
+    let mut text = ArrayString::<10>::new();
+    let _ = write!(&mut text, "{}", counter);
+    Text::new(&text, position, style).draw(display).map_err(|_| ())?;
+    display.flush().map_err(|_| ())
 }
 
 fn display_text<T>(
