@@ -9,7 +9,9 @@ use embedded_graphics::{
     prelude::*,
     mono_font::{MonoTextStyle, ascii::FONT_6X10}, text::Text
 };
-use embedded_hal::spi;
+use embedded_hal::{
+    spi, spi::FullDuplex, digital::v2::OutputPin
+};
 use embedded_sdmmc::{
     Controller, SdMmcSpi, TimeSource, Timestamp, VolumeIdx, Volume, Mode, Directory
 };
@@ -78,9 +80,6 @@ fn run(
     let mut volume: Option<Volume> = open_file_volume(&mut sd_controller, &mut out_text);
 
     if let Some(ref mut volume) = volume {
-        // Store a few first file names just to print their contents later
-        let mut file_names: ArrayVec<ArrayString::<12>, 3> = ArrayVec::new();
-
         let root_dir = match sd_controller.open_root_dir(volume) {
             Ok(dir) => Some(dir),
             Err(_err) => {
@@ -90,6 +89,7 @@ fn run(
         };
 
         if let Some(dir) = root_dir {
+            let mut file_names: ArrayVec<ArrayString::<12>, 2> = ArrayVec::new();
             read_file_names(&mut sd_controller, volume, &dir, &mut file_names);
             print_file_contents(&mut sd_controller, volume, &dir, &file_names, &mut out_text);
         }
@@ -113,30 +113,38 @@ fn print_file_contents<SPI, CS, T>(
     out: &mut dyn Write
 )
 where
-    SPI: embedded_hal::spi::FullDuplex<u8>,
-    CS: embedded_hal::digital::v2::OutputPin,
+    SPI: FullDuplex<u8>,
+    CS: OutputPin,
     T: TimeSource,
-    <SPI as embedded_hal::spi::FullDuplex<u8>>::Error: core::fmt::Debug
+    <SPI as FullDuplex<u8>>::Error: core::fmt::Debug
 {
     const READ: Mode = Mode::ReadOnly;
 
     for file_name in file_names {
         if file_name.len() > 0 {
             if let Ok(mut file) = controller.open_file_in_dir(volume, dir, file_name, READ) {
-                let _ = writeln!(out, "* {}", file_name);
                 let mut buffer = [0u8; 32];
                 let read_size = controller.read(&volume, &mut file, &mut buffer).unwrap();
                 let bytes = &buffer[0..read_size];
-
-                for byte in bytes {
-                    let _ = write!(out, "{}", *byte as char);
-                }
-
-                if read_size > 0 {
-                    let _ = writeln!(out, "");
-                }
+                write_file_data(&file_name, bytes, out);
             }
         }
+    }
+}
+
+fn write_file_data(
+    file_name: &str,
+    bytes: &[u8],
+    out: &mut dyn Write
+) {
+    let _ = writeln!(out, "* {}", file_name);
+
+    for byte in bytes {
+        let _ = write!(out, "{}", *byte as char);
+    }
+
+    if bytes.len() > 0 {
+        let _ = writeln!(out, "");
     }
 }
 
@@ -148,10 +156,10 @@ fn read_file_names<SPI, CS, T, const N: usize>(
     file_names: &mut ArrayVec<ArrayString::<12>, N>
 )
 where
-    SPI: embedded_hal::spi::FullDuplex<u8>,
-    CS: embedded_hal::digital::v2::OutputPin,
+    SPI: FullDuplex<u8>,
+    CS: OutputPin,
     T: TimeSource,
-    <SPI as embedded_hal::spi::FullDuplex<u8>>::Error: core::fmt::Debug
+    <SPI as FullDuplex<u8>>::Error: core::fmt::Debug
 {
     let _ = controller
         .iterate_dir(volume, &dir, |item| {
@@ -170,10 +178,10 @@ fn open_file_volume<SPI, CS, T>(
     out: &mut dyn Write
 ) -> Option<Volume>
 where
-    SPI: embedded_hal::spi::FullDuplex<u8>,
-    CS: embedded_hal::digital::v2::OutputPin,
+    SPI: FullDuplex<u8>,
+    CS: OutputPin,
     T: TimeSource,
-    <SPI as embedded_hal::spi::FullDuplex<u8>>::Error: core::fmt::Debug
+    <SPI as FullDuplex<u8>>::Error: core::fmt::Debug
 {
     match controller.device().init() {
         Ok(_) => {
