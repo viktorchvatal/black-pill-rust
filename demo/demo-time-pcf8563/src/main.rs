@@ -1,13 +1,13 @@
 #![no_std]
 #![no_main]
 
-use core::fmt::Write;
+use core::{fmt::Write};
 use arrayvec::ArrayString;
 use cortex_m_rt::{entry};
 use embedded_graphics::{
     pixelcolor::BinaryColor,
     prelude::*,
-    mono_font::{MonoTextStyle, ascii::FONT_7X13_BOLD}, text::Text
+    mono_font::{MonoTextStyle, ascii::FONT_10X20}, text::Text
 };
 use embedded_hal::spi;
 use panic_halt as _;
@@ -75,6 +75,21 @@ fn run(
 
     let mut rtc = PCF8563::new(i2c);
 
+    /*
+    // Set date and time
+    let now = DateTime {
+        year: 22,
+        month: 11,
+        weekday: 5,
+        day: 18,
+        hours: 11,
+        minutes: 28,
+        seconds: 00,
+    };
+
+    rtc.set_datetime(&now).unwrap();
+     */
+
     loop {
         led.set_high();
         display.clear();
@@ -86,17 +101,27 @@ fn run(
                 render_date(&mut text, datetime).unwrap();
             },
             Err(error) => {
-                let _ = write!(&mut text, "{:?}", error);
+                let _ = write!(&mut text, "Error:\n{:?}", error);
             }
         };
 
         display_text(&mut display, &text).unwrap();
 
-        display.flush().unwrap();
         led.set_low();
+
         delay.delay_ms(100u16);
     }
 }
+
+const DAYS: &[&str] = &[
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+];
 
 fn render_date<W>(
     destination: &mut W,
@@ -104,14 +129,14 @@ fn render_date<W>(
 ) -> Result<(), ()> where W: Write {
     write!(
         destination,
-        "{:02}/{:02}/{:02}\n{:02}:{:02}:{:02}\nday {}\r",
-        datetime.year,
-        datetime.month,
+        "{:02}.{:02}.20{:02}\n{:02}:{:02}:{:02}\n{}",
         datetime.day,
+        datetime.month,
+        datetime.year,
         datetime.hours,
         datetime.minutes,
         datetime.seconds,
-        datetime.weekday
+        DAYS[datetime.weekday as usize]
     ).map_err(|_| ())
 }
 
@@ -122,8 +147,8 @@ fn display_text<T>(
 where T: DisplayInterface {
     display.clear();
 
-    let style = MonoTextStyle::new(&FONT_7X13_BOLD, BinaryColor::On);
-    let position = Point::new(0, 8);
+    let style = MonoTextStyle::new(&FONT_10X20, BinaryColor::On);
+    let position = Point::new(0, 14);
     Text::new(&message, position, style).draw(display).map_err(|_| ())?;
     display.flush().map_err(|_| ())
 }
