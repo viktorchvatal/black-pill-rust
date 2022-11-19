@@ -7,16 +7,17 @@ mod sd_logger;
 use arrayvec::{ArrayString};
 use pcf8563::PCF8563;
 use sd_logger::{append_to_file, SdWriteError};
-use time::ClockData;
+use time::{ClockData, ZERO_TIMESTAMP};
 use core::{fmt::Write, panic::PanicInfo};
 use cortex_m_rt::{entry};
+use embedded_hal::{spi::FullDuplex, digital::v2::OutputPin};
 use embedded_graphics::{
     pixelcolor::BinaryColor,
     prelude::*,
     mono_font::{MonoTextStyle, ascii::FONT_6X10}, text::Text
 };
 use embedded_hal::{spi};
-use embedded_sdmmc::{Controller, SdMmcSpi};
+use embedded_sdmmc::{Controller, SdMmcSpi, TimeSource};
 use sh1106::{prelude::*, Builder, interface::DisplayInterface};
 use stm32f4xx_hal::{prelude::*, pac, gpio::NoPin, i2c::I2c};
 
@@ -101,6 +102,8 @@ fn run(
     let sd_cs = gpiob.pb0.into_push_pull_output();
     let mut sd_controller = Controller::new(SdMmcSpi::new(sd_spi, sd_cs), ClockData::default());
     let mut counter: usize = 0;
+    let mut last_write_attempt = ZERO_TIMESTAMP;
+    let mut write_debug = ArrayString::<80>::new();
 
     loop {
         let mut text = ArrayString::<200>::new();
@@ -111,32 +114,63 @@ fn run(
             clock.reset_to_default();
         }
 
-        write_date_time(&mut text, &clock)?;
-        writeln!(&mut text, "").map_err(|_| ())?;
+        let date_time_str = format_date_time(&clock);
+        writeln!(&mut text, "{}", date_time_str).map_err(|_| ())?;
 
-        let mut file_name = ArrayString::<15>::new();
-        write_file_name(&mut file_name, &clock)?;
+        if clock.is_present() && clock.seconds() % 10 == 0 {
+            if last_write_attempt != clock.get_timestamp() {
+                last_write_attempt = clock.get_timestamp();
 
-        let mut file_line = ArrayString::<100>::new();
-        write_file_line(&mut file_line, &clock, counter)?;
-
-        match append_to_file(&mut sd_controller, &file_name, &file_line) {
-            Ok(_) => {
-                let _ = writeln!(&mut text, "Line written\n{}\n{}", file_name, file_line);
-            },
-            Err(error) => {
-                let _ = writeln!(&mut text, "SD Write failed\n{:?}", error);
-
-                if let SdWriteError::CannotWriteToOpenedFile(message) = error {
-                    let _ = writeln!(&mut text, "{}", message);
-                }
+                write_debug = write_record_to_sd_card(
+                    &clock, counter, &mut sd_controller
+                );
             }
         }
 
+        writeln!(&mut text, "{}", write_debug).map_err(|_| ())?;
+
         display_text(&mut display, &text)?;
-        delay.delay_ms(10000u16);
+        delay.delay_ms(200u16);
         counter += 1;
     }
+}
+
+fn write_record_to_sd_card<SPI, CS, T>(
+    clock: &ClockData,
+    counter: usize,
+    sd_controller: &mut Controller<SdMmcSpi<SPI, CS>, T>,
+) -> ArrayString::<80>
+where
+    SPI: FullDuplex<u8>,
+    CS: OutputPin,
+    T: TimeSource,
+    <SPI as FullDuplex<u8>>::Error: core::fmt::Debug
+{
+    let mut debug = ArrayString::<80>::new();
+
+    let mut file_name = ArrayString::<15>::new();
+    let _ = write_file_name(&mut file_name, clock);
+
+    let mut file_line = ArrayString::<100>::new();
+    let _ = write_file_line(&mut file_line, clock, counter);
+
+    match append_to_file(sd_controller, &file_name, &file_line) {
+        Ok(_) => {
+            let _ = writeln!(&mut debug, "Line written\n{}\n{}", file_name, file_line);
+        },
+        Err(error) => {
+            let date_time_str = format_date_time(&clock);
+            let _ = writeln!(&mut debug, "SD Write failed\n{}\n{}", date_time_str, error);
+
+            if let SdWriteError::CannotWriteToOpenedFile(
+                embedded_sdmmc::Error::DeviceError(device_error)
+            ) = error {
+                let _ = writeln!(&mut debug, "{:?}", device_error);
+            }
+        }
+    };
+
+    debug
 }
 
 fn write_file_line(
@@ -164,16 +198,17 @@ fn write_file_name(
     ).map_err(|_| ())
 }
 
-fn write_date_time(
-    output: &mut dyn Write,
-    time: &ClockData,
-) -> Result<(), ()> {
-    write!(
-        output,
+fn format_date_time(time: &ClockData) -> ArrayString<20> {
+    let mut buffer = ArrayString::<20>::new();
+
+    let _ = write!(
+        &mut buffer,
         "{}.{}.{} {}:{:02}:{:02}",
         time.day(), time.month(), time.year(),
         time.hours(), time.minutes(), time.seconds()
-    ).map_err(|_| ())
+    );
+
+    buffer
 }
 
 fn display_text<T>(

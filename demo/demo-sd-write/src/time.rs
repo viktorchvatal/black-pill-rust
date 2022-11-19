@@ -6,7 +6,7 @@ pub struct ClockData {
     day_of_week: u8,
 }
 
-const ZERO_TIMESTAMP: Timestamp = Timestamp {
+pub const ZERO_TIMESTAMP: Timestamp = Timestamp {
     year_since_1970: 0,
     zero_indexed_month: 0,
     zero_indexed_day: 0,
@@ -39,6 +39,10 @@ impl ClockData {
     pub fn reset_to_default(&mut self) {
         self.timestamp = ZERO_TIMESTAMP;
         self.day_of_week = 0;
+    }
+
+    pub fn is_present(&self) -> bool {
+        self.year() > 0
     }
 
     pub fn year(&self) -> u16 {
