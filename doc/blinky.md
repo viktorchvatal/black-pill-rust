@@ -1,6 +1,6 @@
 # Blinking LED
 
-Example code: [demo-blinky/src/main.rs](../demo/demo-blinky/src/main.rs)
+Example code: [demo-blinky/src/main.rs](../app/demo-blinky/src/main.rs)
 
 ![Blinking LED](https://raw.githubusercontent.com/viktorchvatal/black-pill-rust-assets/master/black-blinky/black-blinky.gif)
 

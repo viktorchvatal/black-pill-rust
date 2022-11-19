@@ -1,6 +1,6 @@
 # ADXL345 I2C Accelerometer
 
-Example code: [demo-accel-adxl345/src/main.rs](../demo/demo-accel-adxl345/src/main.rs)
+Example code: [demo-accel-adxl345/src/main.rs](../app/demo-accel-adxl345/src/main.rs)
 
 ![ADXL345 Accelerometer example](https://raw.githubusercontent.com/viktorchvatal/black-pill-rust-assets/master/accel-adxl345/accel-adxl345.gif)
 

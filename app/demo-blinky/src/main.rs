@@ -1,12 +1,3 @@
-//! Blinks an LED and outputs ON and OFF debug messages via semihosting i/o
-//!
-//! This assumes that a LED is connected to pc13 as is the case on the blue pill board.
-//!
-//! Note: Without additional hardware, PC13 should not be used to drive an LED, see page 5.1.2 of
-//! the reference manual for an explanation. This is not an issue on the blue pill.
-//!
-//! Original source: https://github.com/stm32-rs/stm32f1xx-hal/blob/master/examples/blinky.rs
-
 #![deny(unsafe_code)]
 #![no_std]
 #![no_main]
@@ -27,7 +18,7 @@ fn main() -> ! {
 
         let clocks = rcc.cfgr.use_hse(25.MHz()).sysclk(100.MHz()).hclk(25.MHz()).freeze();
 
-        // Create a delay abstraction based on general-pupose 32-bit timer TIM5
+        // Create a delay abstraction based on general-purpose 32-bit timer TIM5
         let mut delay = dp.TIM5.delay_us(&clocks);
 
         // Acquire the GPIOC peripheral

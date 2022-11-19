@@ -1,6 +1,6 @@
 # SH1106 OLED SPI matrix display
 
-Example code: [demo-display-sh1106/src/main.rs](../demo/demo-display-sh1106/src/main.rs)
+Example code: [demo-display-sh1106/src/main.rs](../app/demo-display-sh1106/src/main.rs)
 
 ![SH1106 display example](https://raw.githubusercontent.com/viktorchvatal/black-pill-rust-assets/master/display-sh1106/display-sh1106.gif)
 
