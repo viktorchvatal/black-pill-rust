@@ -2,9 +2,11 @@
 #![no_main]
 
 mod time;
+mod sd_logger;
 
 use arrayvec::{ArrayString};
 use pcf8563::PCF8563;
+use sd_logger::{append_to_file, SdWriteError};
 use time::ClockData;
 use core::{fmt::Write, panic::PanicInfo};
 use cortex_m_rt::{entry};
@@ -13,12 +15,8 @@ use embedded_graphics::{
     prelude::*,
     mono_font::{MonoTextStyle, ascii::FONT_6X10}, text::Text
 };
-use embedded_hal::{
-    spi, spi::FullDuplex, digital::v2::OutputPin
-};
-use embedded_sdmmc::{
-    Controller, SdMmcSpi, TimeSource, VolumeIdx, Volume, Mode,
-};
+use embedded_hal::{spi};
+use embedded_sdmmc::{Controller, SdMmcSpi};
 use sh1106::{prelude::*, Builder, interface::DisplayInterface};
 use stm32f4xx_hal::{prelude::*, pac, gpio::NoPin, i2c::I2c};
 
@@ -122,7 +120,18 @@ fn run(
         let mut file_line = ArrayString::<100>::new();
         write_file_line(&mut file_line, &clock, counter)?;
 
-        append_to_file(&mut sd_controller, &mut text, &file_name, &file_line);
+        match append_to_file(&mut sd_controller, &file_name, &file_line) {
+            Ok(_) => {
+                let _ = writeln!(&mut text, "Line written\n{}\n{}", file_name, file_line);
+            },
+            Err(error) => {
+                let _ = writeln!(&mut text, "SD Write failed\n{:?}", error);
+
+                if let SdWriteError::CannotWriteToOpenedFile(message) = error {
+                    let _ = writeln!(&mut text, "{}", message);
+                }
+            }
+        }
 
         display_text(&mut display, &text)?;
         delay.delay_ms(1000u16);
@@ -137,7 +146,7 @@ fn write_file_line(
 ) -> Result<(), ()> {
     writeln!(
         output,
-        "{}-{}-{} {}:{:02}:{:02} {}",
+        "{}-{}-{} {}:{:02}:{:02} {} A",
         time.year(), time.month(), time.day(),
         time.hours(), time.minutes(), time.seconds(),
         counter
@@ -165,92 +174,6 @@ fn write_date_time(
         time.day(), time.month(), time.year(),
         time.hours(), time.minutes(), time.seconds()
     ).map_err(|_| ())
-}
-
-fn append_to_file<SPI, CS, T>(
-    controller: &mut Controller<SdMmcSpi<SPI, CS>, T>,
-    out: &mut dyn Write,
-    file_name: &str,
-    file_data: &str,
-)
-where
-    SPI: FullDuplex<u8>,
-    CS: OutputPin,
-    T: TimeSource,
-    <SPI as FullDuplex<u8>>::Error: core::fmt::Debug
-{
-    let mut volume = open_file_volume(controller, out);
-
-    if let Some(ref mut volume) = volume {
-        let root_dir = match controller.open_root_dir(volume) {
-            Ok(dir) => Some(dir),
-            Err(err) => {
-                let _ = writeln!(out, "Root dir read ERR\n{:?}", err);
-                None
-            }
-        };
-
-        if let Some(dir) = root_dir {
-            match controller
-                .open_file_in_dir(volume, &dir, file_name, Mode::ReadWriteCreateOrAppend)
-            {
-                Ok(mut file) => {
-                    match controller.write(volume, &mut file, file_data.as_bytes()) {
-                        Ok(_) => {
-                            let _ = writeln!(out, "Line written\n{}\n{}", file_name, file_data);
-                        },
-                        Err(_err) => {
-                            let _ = writeln!(out, "Write file ERR\n");
-                        }
-                    }
-                    let _ = controller.close_file(volume, file);
-                },
-                Err(_err) => {
-                    let _ = writeln!(out, "Open file ERR\n");
-                }
-            };
-
-            controller.close_dir(volume, dir);
-        }
-
-        controller.device().deinit();
-    }
-}
-
-/// Open first SD card volume and return it
-/// Generate debug output into `out` writable
-fn open_file_volume<SPI, CS, T>(
-    controller: &mut Controller<SdMmcSpi<SPI, CS>, T>,
-    out: &mut dyn Write
-) -> Option<Volume>
-where
-    SPI: FullDuplex<u8>,
-    CS: OutputPin,
-    T: TimeSource,
-    <SPI as FullDuplex<u8>>::Error: core::fmt::Debug
-{
-    match controller.device().init() {
-        Ok(_) => {
-            match controller.device().card_size_bytes() {
-                Ok(size) => writeln!(out, "SD OK: {} MB", size >> 20).unwrap(),
-                Err(_err) => writeln!(out, "SD Card Connected\nCannot read size").unwrap(),
-            }
-            match controller.get_volume(VolumeIdx(0)) {
-                Ok(volume) => {
-                    writeln!(out, "Get FAT Volume 0: OK").unwrap();
-                    Some(volume)
-                },
-                Err(_err) => {
-                    writeln!(out, "Vol 0 cannot read FAT").unwrap();
-                    None
-                },
-            }
-        }
-        Err(_err) => {
-            writeln!(out, "SD Card Error\nCannot connect").unwrap();
-            None
-        },
-    }
 }
 
 fn display_text<T>(

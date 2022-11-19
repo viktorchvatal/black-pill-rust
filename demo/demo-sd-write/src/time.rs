@@ -53,6 +53,7 @@ impl ClockData {
         self.timestamp.zero_indexed_day + 1
     }
 
+    #[allow(dead_code)]
     pub fn week_day(&self) -> u8 {
         self.day_of_week
     }
