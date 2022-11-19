@@ -1,0 +1,21 @@
+[package]
+name = "demo-display-hx1230"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+embedded-hal = "0.2.6"
+nb = "1"
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "0.2.0"
+embedded-graphics = "0.7.1"
+hx1230 = "0.3.2"
+
+[dependencies.stm32f4xx-hal]
+version = "0.13.2"
+features = ["stm32f411"]
+
+[dependencies.arrayvec]
+version = "0.7.2"
+default-features = false
