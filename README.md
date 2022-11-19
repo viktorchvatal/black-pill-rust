@@ -46,6 +46,12 @@ Also check different memory limits in the [memory.x](memory.x) file.
 
 ![SH1106 display example](https://raw.githubusercontent.com/viktorchvatal/black-pill-rust-assets/master/display-sh1106/display-sh1106-small.gif)
 
+## HX1230 LCD SPI matrix display [TODO]
+
+[HX1230 display example](doc/display-hx1230.md)
+
+![SH1106 display example](https://raw.githubusercontent.com/viktorchvatal/black-pill-rust-assets/master/display-hx1230/display-hx1230-small.gif)
+
 ## ADXL345 I2C Accelerometer
 
 [ADXL345 Accelerometer example](doc/accel-adxl345.md)

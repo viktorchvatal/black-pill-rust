@@ -24,11 +24,8 @@ fn main() -> ! {
 
 fn run(
     dp: pac::Peripherals,
-    mut cp: cortex_m::Peripherals,
+    _cp: cortex_m::Peripherals,
 ) -> Result<(), ()> {
-    cp.DCB.enable_trace();
-    cp.DWT.enable_cycle_counter();
-
     let rcc = dp.RCC.constrain();
 
     let clocks = rcc.cfgr.use_hse(25.MHz()).sysclk(100.MHz()).hclk(25.MHz()).freeze();
