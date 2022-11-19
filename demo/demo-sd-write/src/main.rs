@@ -148,8 +148,7 @@ where
 {
     let mut debug = ArrayString::<80>::new();
 
-    let mut file_name = ArrayString::<15>::new();
-    let _ = write_file_name(&mut file_name, clock);
+    let file_name = format_log_file_name(clock);
 
     let mut file_line = ArrayString::<100>::new();
     let _ = write_file_line(&mut file_line, clock, counter);
@@ -187,15 +186,18 @@ fn write_file_line(
     ).map_err(|_| ())
 }
 
-fn write_file_name(
-    output: &mut dyn Write,
+fn format_log_file_name(
     time: &ClockData,
-) -> Result<(), ()> {
-    write!(
-        output,
+) -> ArrayString<20> {
+    let mut buffer = ArrayString::<20>::new();
+
+    let _ = write!(
+        buffer,
         "{}{:02}{:02}.log",
         time.year(), time.month(), time.day(),
-    ).map_err(|_| ())
+    );
+
+    buffer
 }
 
 fn format_date_time(time: &ClockData) -> ArrayString<20> {
