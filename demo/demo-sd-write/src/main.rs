@@ -134,7 +134,7 @@ fn run(
         }
 
         display_text(&mut display, &text)?;
-        delay.delay_ms(1000u16);
+        delay.delay_ms(10000u16);
         counter += 1;
     }
 }
